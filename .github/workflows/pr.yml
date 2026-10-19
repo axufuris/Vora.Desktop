@@ -1,0 +1,67 @@
+name: PR Checks
+
+# The checks branch protection requires on main. Packaging the installers on
+# Windows and Linux joins this workflow with the release workflows.
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# A new push to the same PR makes the previous run irrelevant.
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      # electron-vite needs Node 20.19+ or 22.12+.
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      # Nothing here starts Electron, so its binary is not downloaded.
+      - name: Install
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Lint
+        run: npm run lint -- --max-warnings 0
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  bridge:
+    name: Bridge contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The contract is defined in Vora.Web, which uses it; this repo keeps a
+      # byte-for-byte copy, and any difference means the two will not talk.
+      - name: Check out the server's copy
+        uses: actions/checkout@v5
+        with:
+          repository: axufuris/VoraMediaServer
+          path: server
+          sparse-checkout: src/Vora.Web/src/desktop/desktopBridge.ts
+          sparse-checkout-cone-mode: false
+
+      - name: Compare
+        run: diff -u server/src/Vora.Web/src/desktop/desktopBridge.ts src/shared/bridge.ts

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:5180">
+    <title>Connect to Vora</title>
+    <link rel="stylesheet" href="./pages.css">
+</head>
+<body>
+    <main class="panel">
+        <img class="logo" src="./assets/vora-logo.svg" alt="Vora">
+        <h1>Connect to your Vora server</h1>
+
+        <section id="saved" class="saved" hidden>
+            <h2>Your servers</h2>
+            <ul id="saved-list"></ul>
+        </section>
+
+        <form id="connect-form" novalidate>
+            <label for="address">Server address</label>
+            <div class="row">
+                <input id="address" name="address" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="vora.example.com or 192.168.1.20:5000">
+                <button id="find" type="submit" class="primary">Find server</button>
+            </div>
+            <p id="status" class="status" role="status" aria-live="polite"></p>
+        </form>
+
+        <section id="found" class="callout" hidden>
+            <h2>Found</h2>
+            <p id="found-name"></p>
+            <span id="found-url" class="address"></span>
+            <div class="row">
+                <button id="connect" type="button" class="primary">Connect</button>
+            </div>
+        </section>
+
+        <section id="trust" class="callout warning" hidden>
+            <h2 id="trust-title" class="callout-title"></h2>
+            <p id="trust-text"></p>
+            <code id="fingerprint" class="fingerprint"></code>
+            <div class="row">
+                <button id="trust-accept" type="button" class="primary">Trust this certificate</button>
+                <button id="trust-cancel" type="button" class="secondary">Cancel</button>
+            </div>
+        </section>
+    </main>
+    <footer id="version" class="version"></footer>
+    <script type="module" src="./connect.ts"></script>
+</body>
+</html>
