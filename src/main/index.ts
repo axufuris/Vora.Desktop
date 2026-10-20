@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { app, dialog, Menu, session, type BrowserWindow } from 'electron';
+import { app, dialog, Menu, nativeImage, session, type BrowserWindow } from 'electron';
 import type { DesktopChannel, DesktopPlatform, MpvStatus } from '../shared/bridge';
 import { Ipc } from '../shared/shell';
 import { registerBridge } from './bridgeRouter';
@@ -166,6 +166,13 @@ async function start(): Promise<void> {
         window: { hide: () => window.hideForPlayback(), restore: () => window.focus() },
         send: event => window.sendToServerPage(Ipc.playerEvent, event),
         logger,
+        playerFolder: app.isPackaged ? join(process.resourcesPath, 'player') : join(app.getAppPath(), 'src', 'player'),
+        decodeImage: image => {
+            const decoded = nativeImage.createFromBuffer(image);
+            if (decoded.isEmpty()) return null;
+            const { width, height } = decoded.getSize();
+            return { width, height, bgra: decoded.toBitmap() };
+        },
     });
     app.on('will-quit', () => player.dispose());
 

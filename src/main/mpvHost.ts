@@ -1,13 +1,15 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
     DesktopPlatform,
     DesktopSettings,
     MpvStatus,
     OpenRequest,
+    PlayerChromeState,
     PlayerCommand,
     PlayerEvent,
+    ScrubSpriteSpec,
     SidecarSubtitle,
     TrackRef,
 } from '../shared/bridge';
@@ -41,6 +43,12 @@ export interface MpvFolders {
     sockets: string;
 }
 
+export interface DecodedImage {
+    width: number;
+    height: number;
+    bgra: Buffer;
+}
+
 export interface MpvHostOptions {
     platform: DesktopPlatform;
     folders: MpvFolders;
@@ -51,6 +59,8 @@ export interface MpvHostOptions {
     window: PlayerWindow;
     send: (event: PlayerEvent) => void;
     logger: PlayerLog;
+    playerFolder: string | null;
+    decodeImage: (image: Buffer) => DecodedImage | null;
     extraArguments?: readonly string[];
     spawnProcess?: (file: string, args: readonly string[]) => ChildProcess;
 }
@@ -82,6 +92,10 @@ export class MpvHost implements Player {
     private run: MpvRun | null = null;
     private runs = 0;
     private subtitles = 0;
+    private sprites = 0;
+    private chromeMessage: string | null = null;
+    private spriteMessage = '';
+    private spriteFile: string | null = null;
 
     constructor(options: MpvHostOptions) {
         this.options = options;
@@ -154,9 +168,66 @@ export class MpvHost implements Player {
         }
     }
 
+    setChromeState(state: PlayerChromeState): void {
+        this.chromeMessage = JSON.stringify(state);
+        this.toChrome('state', this.chromeMessage);
+    }
+
+    setScrubSprite(spec: ScrubSpriteSpec | null): void {
+        const previous = this.spriteFile;
+        this.spriteFile = null;
+        this.spriteMessage = '';
+        if (spec) {
+            const decoded = this.options.decodeImage(Buffer.from(spec.image));
+            if (decoded && decoded.width > 0 && decoded.height > 0) {
+                mkdirSync(this.options.folders.temp, { recursive: true });
+                const file = join(this.options.folders.temp, `sprite-${process.pid}-${++this.sprites}.bgra`);
+                writeFileSync(file, Buffer.concat([decoded.bgra, Buffer.alloc(decoded.width * 4)]));
+                this.spriteFile = file;
+                this.spriteMessage = JSON.stringify({
+                    file,
+                    width: decoded.width,
+                    height: decoded.height,
+                    stride: decoded.width * 4,
+                    cueWidth: spec.cueWidth,
+                    cueHeight: spec.cueHeight,
+                    cues: spec.cues,
+                });
+            } else {
+                this.options.logger.warn('The scrub thumbnails could not be decoded');
+            }
+        }
+        this.toChrome('sprite', this.spriteMessage);
+        if (previous) rmSync(previous, { force: true });
+    }
+
+    private toChrome(kind: 'state' | 'sprite', message: string): void {
+        const ipc = this.run?.ipc;
+        if (!this.options.playerFolder || !ipc || ipc.isClosed) return;
+        ipc.send(['script-message-to', 'vora', kind, message]);
+    }
+
+    private chromeReady(): void {
+        if (this.chromeMessage) this.toChrome('state', this.chromeMessage);
+        this.toChrome('sprite', this.spriteMessage);
+    }
+
+    private copyFonts(): void {
+        const player = this.options.playerFolder;
+        if (!player) return;
+        const source = join(player, 'fonts');
+        if (!existsSync(source)) return;
+        const target = join(this.options.folders.runtime, 'fonts');
+        mkdirSync(target, { recursive: true });
+        for (const name of readdirSync(source)) {
+            if (name.toLowerCase().endsWith('.ttf')) copyFileSync(join(source, name), join(target, name));
+        }
+    }
+
     dispose(): void {
         const run = this.run;
         this.run = null;
+        if (this.spriteFile) rmSync(this.spriteFile, { force: true });
         if (!run) return;
         run.closing = true;
         run.process.kill();
@@ -169,11 +240,14 @@ export class MpvHost implements Player {
 
         const { folders } = options;
         for (const folder of [folders.runtime, folders.temp, folders.logs, folders.sockets]) mkdirSync(folder, { recursive: true });
+        const player = options.playerFolder;
         writeFileSync(join(folders.runtime, 'mpv.conf'), runtimeMpvConf({
             platform: options.platform,
             settings: options.settings(),
             advancedConf: options.advancedConf(),
+            inputConf: player ? join(player, 'input.conf') : null,
         }), 'utf8');
+        this.copyFonts();
 
         const ipcPath = ipcPathFor(options.platform, process.pid, ++this.runs, folders.sockets);
         if (options.platform !== 'windows') rmSync(ipcPath, { force: true });
@@ -182,6 +256,7 @@ export class MpvHost implements Player {
             ipcPath,
             logFile: join(folders.logs, 'mpv.log'),
             verifyTls: options.verifyTls(url),
+            script: player ? join(player, 'vora') : null,
             extraArguments: options.extraArguments,
         });
 
@@ -220,8 +295,10 @@ export class MpvHost implements Player {
             ipc.onMessage(message => {
                 run.playback.handle(message);
                 if (message.event === 'file-loaded') void this.fileLoaded(run);
+                if (message.event === 'client-message' && Array.isArray(message.args) && message.args[0] === 'vora-ready') this.chromeReady();
             });
             for (const [index, name] of OBSERVED_PROPERTIES.entries()) ipc.send(['observe_property', index + 1, name]);
+            this.chromeReady();
             return run;
         } catch (error: unknown) {
             if (this.run === run) this.run = null;
@@ -249,6 +326,7 @@ export class MpvHost implements Player {
             this.options.logger.info('Playing in mpv, so the app window is hidden');
             this.options.window.hide();
         }
+        this.chromeReady();
         await this.applyTracks(run, run.wanted);
         const waiting = run.waiting;
         run.waiting = [];

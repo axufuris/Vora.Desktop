@@ -1,4 +1,4 @@
-import type { ChromeIntent, OpenRequest, PlayerCommand, ScrubSpriteSpec, TrackRef } from '../shared/bridge';
+import type { ChromeIntent, MarkerKind, OpenRequest, PlayerChromeState, PlayerCommand, ScrubSpriteSpec, TrackOption, TrackRef } from '../shared/bridge';
 import { isServerPage } from './navigation';
 import type { IpcValue } from './values';
 import { hasOnlyKeys, isFiniteNumber, isRecord, stringOrNull } from './values';
@@ -122,4 +122,116 @@ export function chromeIntentFrom(value: IpcValue): ChromeIntent | null {
         default:
             return null;
     }
+}
+
+const MAX_LIST = 200;
+const MAX_LABEL = 300;
+const MARKER_KINDS: readonly MarkerKind[] = ['Intro', 'Recap', 'Preview', 'Credits', 'CreditsScene'];
+const STATUSES: readonly PlayerChromeState['status'][] = ['loading', 'playing', 'error'];
+
+function text(value: IpcValue, maxLength: number): string | undefined {
+    return typeof value === 'string' && value.length <= maxLength ? value : undefined;
+}
+
+function listOf<T>(value: IpcValue, max: number, item: (entry: IpcValue) => T | undefined): T[] | undefined {
+    if (!Array.isArray(value) || value.length > max) return undefined;
+    const items: T[] = [];
+    for (const entry of value) {
+        const parsed = item(entry);
+        if (parsed === undefined) return undefined;
+        items.push(parsed);
+    }
+    return items;
+}
+
+function trackOptionFrom(value: IpcValue): TrackOption | undefined {
+    if (!isRecord(value)) return undefined;
+    const id = text(value.id, MAX_INTENT_ID);
+    const label = text(value.label, MAX_LABEL);
+    const detail = stringOrNull(value.detail, MAX_LABEL);
+    if (id === undefined || label === undefined || detail === undefined || typeof value.selected !== 'boolean') return undefined;
+    return { id, label, detail, selected: value.selected };
+}
+
+function markerFrom(value: IpcValue): PlayerChromeState['markers'][number] | undefined {
+    if (!isRecord(value)) return undefined;
+    const kind = MARKER_KINDS.find(candidate => candidate === value.kind);
+    if (!kind || !isFiniteNumber(value.start) || !isFiniteNumber(value.end)) return undefined;
+    return { kind, start: value.start, end: value.end };
+}
+
+function qualityOptionFrom(value: IpcValue): PlayerChromeState['quality']['options'][number] | undefined {
+    if (!isRecord(value)) return undefined;
+    const id = text(value.id, MAX_INTENT_ID);
+    const label = text(value.label, MAX_LABEL);
+    if (id === undefined || label === undefined || typeof value.selected !== 'boolean') return undefined;
+    return { id, label, selected: value.selected };
+}
+
+function infoRowFrom(value: IpcValue): PlayerChromeState['info'][number] | undefined {
+    if (!isRecord(value)) return undefined;
+    const label = text(value.label, MAX_LABEL);
+    const rowValue = text(value.value, MAX_LABEL);
+    return label === undefined || rowValue === undefined ? undefined : { label, value: rowValue };
+}
+
+export function chromeStateFrom(value: IpcValue): PlayerChromeState | null {
+    if (!isRecord(value)) return null;
+    const { theme, quality, skip, upNext } = value;
+    const title = text(value.title, MAX_TITLE);
+    const subtitle = stringOrNull(value.subtitle, MAX_TITLE);
+    const status = STATUSES.find(candidate => candidate === value.status);
+    const statusText = stringOrNull(value.statusText, 1000);
+    if (title === undefined || subtitle === undefined || !status || statusText === undefined) return null;
+    if (!isRecord(theme) || !isRecord(quality) || typeof value.canPlayNext !== 'boolean' || typeof value.canPlayPrevious !== 'boolean') return null;
+
+    const colours = {
+        accent: text(theme.accent, 16),
+        surface: text(theme.surface, 16),
+        text: text(theme.text, 16),
+        textMuted: text(theme.textMuted, 16),
+    };
+    if (colours.accent === undefined || colours.surface === undefined || colours.text === undefined || colours.textMuted === undefined) return null;
+
+    let skipState: PlayerChromeState['skip'] = null;
+    if (skip !== null) {
+        const label = isRecord(skip) ? text(skip.label, 100) : undefined;
+        if (label === undefined) return null;
+        skipState = { label };
+    }
+
+    let upNextState: PlayerChromeState['upNext'] = null;
+    if (upNext !== null) {
+        if (!isRecord(upNext)) return null;
+        const nextTitle = text(upNext.title, MAX_TITLE);
+        const nextSubtitle = stringOrNull(upNext.subtitle, MAX_TITLE);
+        const countdown = upNext.countdownSeconds === null ? null : isFiniteNumber(upNext.countdownSeconds) ? upNext.countdownSeconds : undefined;
+        if (nextTitle === undefined || nextSubtitle === undefined || countdown === undefined) return null;
+        upNextState = { title: nextTitle, subtitle: nextSubtitle, countdownSeconds: countdown };
+    }
+
+    const markers = listOf(value.markers, MAX_LIST, markerFrom);
+    const audio = listOf(value.audio, MAX_LIST, trackOptionFrom);
+    const subtitles = listOf(value.subtitles, MAX_LIST, trackOptionFrom);
+    const options = listOf(quality.options, 50, qualityOptionFrom);
+    const currentLabel = text(quality.currentLabel, MAX_LABEL);
+    const info = listOf(value.info, 50, infoRowFrom);
+    if (!markers || !audio || !subtitles || !options || currentLabel === undefined || !info) return null;
+
+    return {
+        title,
+        subtitle,
+        theme: { accent: colours.accent, surface: colours.surface, text: colours.text, textMuted: colours.textMuted },
+        status,
+        statusText,
+        markers,
+        skip: skipState,
+        upNext: upNextState,
+        audio,
+        subtitles,
+        quality: { options, currentLabel },
+        info,
+        canPlayNext: value.canPlayNext,
+        canPlayPrevious: value.canPlayPrevious,
+    };
 }

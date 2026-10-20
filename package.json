@@ -16,7 +16,8 @@
     "test": "vitest run",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.pages.json",
-    "fetch-mpv": "node --experimental-strip-types scripts/fetch-mpv-windows.mts"
+    "fetch-mpv": "node --experimental-strip-types scripts/fetch-mpv-windows.mts",
+    "build-icons": "node --experimental-strip-types scripts/build-icons.mts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

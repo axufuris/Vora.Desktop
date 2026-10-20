@@ -10,9 +10,9 @@ real HDR output and audio passthrough.
 The shell (the connect page, the web client loaded from your server, trust for a home
 server's self-signed certificate, the security lock-down, the `window.voraDesktop` bridge
 and the desktop player settings) and the mpv player. Movies, episodes and extras play in
-mpv, straight from the file. Until the Vora player controls are drawn inside mpv,
-mpv's own on-screen controls and keys are used (`q` returns to the app). Installers come
-with the release workflows.
+mpv, straight from the file, under the Vora player controls: the web player's look,
+drawn inside mpv by `src/player/vora/` so HDR output is untouched (see
+[docs/player-parity.md](docs/player-parity.md)). Installers come with the release workflows.
 
 mpv comes from:
 
@@ -48,6 +48,7 @@ VORA_DESKTOP_DEV_URL=http://localhost:5173 npm run dev
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript, main and pages |
 | `npm run fetch-mpv` | Downloads the pinned Windows mpv into `resources/mpv/` and checks its SHA-256 |
+| `npm run build-icons` | Turns the SVGs in `src/player/icons/` (the web player's) into `src/player/vora/icons.lua` |
 
 `src/main/mpvHost.integration.test.ts` plays a generated video in the real mpv. It runs
 when an mpv the app accepts and FFmpeg are found (`VORA_TEST_FFMPEG` points at an FFmpeg
