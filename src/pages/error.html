@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:5180">
+    <title>Vora</title>
+    <link rel="stylesheet" href="./pages.css">
+</head>
+<body>
+    <main class="panel">
+        <img class="logo" src="./assets/vora-logo.svg" alt="Vora">
+        <h1 id="title"></h1>
+        <p id="message"></p>
+        <span id="address" class="address"></span>
+
+        <section id="trust" class="callout warning" hidden>
+            <h2>Certificate fingerprint</h2>
+            <code id="fingerprint" class="fingerprint"></code>
+        </section>
+
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+
+        <div class="row">
+            <button id="primary" type="button" class="primary"></button>
+            <button id="switch" type="button" class="secondary">Switch server</button>
+        </div>
+    </main>
+    <footer id="version" class="version"></footer>
+    <script type="module" src="./error.ts"></script>
+</body>
+</html>

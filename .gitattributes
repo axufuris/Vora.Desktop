@@ -1,0 +1,9 @@
+# Every text file is stored and checked out with LF. text=auto alone would
+# check files out as CRLF on Windows with core.autocrlf=true, and then the CI
+# check that src/shared/bridge.ts matches Vora.Web's desktopBridge.ts byte for
+# byte would fail on a line ending.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.icns binary
