@@ -2,15 +2,25 @@
 
 The Windows and Linux app for a [Vora](https://github.com/axufuris/VoraMediaServer) media
 server. It is your server's own web client in a window — browsing, settings, admin, music,
-radio and Live TV all work as they do in a browser — and it will play video in mpv, with
+radio and Live TV all work as they do in a browser — and it plays video in mpv, with
 real HDR output and audio passthrough.
 
 ## Status
 
-This is the shell: the connect page, the web client loaded from your server, trust for a
-home server's self-signed certificate, the security lock-down, the `window.voraDesktop`
-bridge, and the desktop player settings. **The mpv player is not in this build yet**, so
-video plays in the web client's built-in player. Installers come with the release workflows.
+The shell (the connect page, the web client loaded from your server, trust for a home
+server's self-signed certificate, the security lock-down, the `window.voraDesktop` bridge
+and the desktop player settings) and the mpv player. Movies, episodes and extras play in
+mpv, straight from the file. Until the Vora player controls are drawn inside mpv,
+mpv's own on-screen controls and keys are used (`q` returns to the app). Installers come
+with the release workflows.
+
+mpv comes from:
+
+- **Windows:** the official mpv release pinned in `scripts/mpv-windows.json`, unpacked
+  into `resources/mpv/` by `npm run fetch-mpv` (the installer will bundle it).
+- **Linux:** the distribution's mpv, 0.37 or newer (`sudo apt install mpv` and the like).
+  Without it, video plays in the web client's built-in player and a banner says what to
+  install; focusing the window after installing it is enough.
 
 ## Development
 
@@ -37,6 +47,12 @@ VORA_DESKTOP_DEV_URL=http://localhost:5173 npm run dev
 | `npm test` | Unit tests (Vitest) |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript, main and pages |
+| `npm run fetch-mpv` | Downloads the pinned Windows mpv into `resources/mpv/` and checks its SHA-256 |
+
+`src/main/mpvHost.integration.test.ts` plays a generated video in the real mpv. It runs
+when an mpv the app accepts and FFmpeg are found (`VORA_TEST_FFMPEG` points at an FFmpeg
+that is not on `PATH`) and is skipped otherwise; `VORA_REQUIRE_MPV=1` makes it fail
+instead. CI runs it on Ubuntu 24.04 with the distribution's mpv 0.37.
 
 Set `VORA_CHANNEL=qa` at build or dev time for the QA identity: the client name says
 "Vora Desktop QA" and DevTools are on. Prod builds have no DevTools.
@@ -47,7 +63,8 @@ it Electron starts as plain Node.
 
 The app keeps its data in the usual place for the platform (`%APPDATA%\Vora` on Windows,
 `~/.config/Vora` on Linux): the saved servers, trusted certificates, settings, window
-position, logs (`logs/vora-desktop.log`) and the folder for your own mpv settings.
+position, logs (`logs/vora-desktop.log`, and `logs/mpv.log` for the player) and the folder
+for your own mpv settings (`mpv/mpv.conf`, read after Vora's).
 
 ## Design
 

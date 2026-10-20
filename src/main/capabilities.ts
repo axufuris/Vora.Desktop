@@ -1,4 +1,5 @@
 import type { DesktopCapabilities } from '../shared/bridge';
+import type { MpvBinary } from './mpvDiscovery';
 
 export const DESKTOP_VIDEO_CODECS = ['h264', 'hevc', 'av1', 'vp9', 'vp8', 'mpeg2video', 'mpeg4', 'vc1'];
 
@@ -14,10 +15,15 @@ export interface DisplaySize {
     height: number;
 }
 
-export function desktopCapabilities(display: DisplaySize): DesktopCapabilities {
+function decodable(known: readonly string[], decoders: ReadonlySet<string> | undefined): string[] {
+    if (!decoders || decoders.size === 0) return [...known];
+    return known.filter(codec => decoders.has(codec));
+}
+
+export function desktopCapabilities(display: DisplaySize, mpv: MpvBinary | null): DesktopCapabilities {
     return {
-        videoCodecs: DESKTOP_VIDEO_CODECS,
-        audioCodecs: DESKTOP_AUDIO_CODECS,
+        videoCodecs: decodable(DESKTOP_VIDEO_CODECS, mpv?.videoDecoders),
+        audioCodecs: decodable(DESKTOP_AUDIO_CODECS, mpv?.audioDecoders),
         containers: DESKTOP_CONTAINERS,
         maxAudioChannels: 8,
         detectedAudioChannels: 8,

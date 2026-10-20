@@ -47,6 +47,35 @@ jobs:
       - name: Build
         run: npm run build
 
+  player:
+    name: Player with mpv
+    # Ubuntu 24.04's mpv is 0.37, the oldest the Vora player accepts, so the
+    # tests run against the version a Linux user is most likely to have.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install mpv and FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mpv ffmpeg
+
+      - name: Install
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      # VORA_REQUIRE_MPV turns a skipped test into a failure, so a broken mpv
+      # install cannot pass this check by running nothing.
+      - name: Test against mpv
+        run: npx vitest run src/main/mpvHost.integration.test.ts
+        env:
+          VORA_REQUIRE_MPV: '1'
+
   bridge:
     name: Bridge contract
     runs-on: ubuntu-latest

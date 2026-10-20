@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { BrowserWindow, screen, shell, type Event, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
+import type { MpvStatus, PlayerEvent } from '../shared/bridge';
 import type { LoadFailure, SavedServer } from '../shared/shell';
 import type { CertTrust } from './certTrust';
 import { readJson, writeJson } from './jsonFile';
@@ -148,6 +149,16 @@ export class WindowManager {
     toggleFullScreen(): void {
         const window = this.window;
         if (window) window.setFullScreen(!window.isFullScreen());
+    }
+
+    hideForPlayback(): void {
+        this.window?.hide();
+    }
+
+    sendToServerPage(channel: string, payload: PlayerEvent | MpvStatus): void {
+        const contents = this.window?.webContents;
+        if (!contents || !this.server || !isServerPage(contents.getURL(), this.serverOrigin())) return;
+        contents.send(channel, payload);
     }
 
     private showPage(page: ShellPage, query: Record<string, string>): void {

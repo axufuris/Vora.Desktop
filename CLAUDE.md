@@ -7,17 +7,18 @@ in VoraMediaServer.
 
 ## What this repo is
 
-An Electron shell that loads the Vora web client from the user's own server. Video moves to
-mpv in later phases (doc 04); installers and releases are doc 05.
+An Electron shell that loads the Vora web client from the user's own server and plays video
+in mpv (doc 04). The Lua player chrome is the next phase; installers and releases are doc 05.
 
 | Path | Holds |
 | --- | --- |
 | `src/main/` | The main process: window (`windowManager.ts`), connect flow, certificate trust, settings, logging, IPC router |
+| `src/main/mpv*.ts` | The player: finding mpv (`mpvDiscovery.ts`), its settings file and arguments (`mpvConfig.ts`), the JSON IPC (`mpvIpc.ts`), mpv events → `PlayerEvent`s (`mpvPlayback.ts`), the server's track choice → mpv track ids (`mpvTracks.ts`), and the process itself (`mpvHost.ts`) |
 | `src/preload/index.ts` | Exposes `window.voraDesktop` to the server's page or `window.voraShell` to the bundled pages, never both, and only what the main process allows |
 | `src/shared/bridge.ts` | The bridge contract, a byte-for-byte copy of `VoraMediaServer/src/Vora.Web/src/desktop/desktopBridge.ts` |
 | `src/shared/shell.ts` | IPC channel names and the bundled pages' API |
 | `src/pages/` | The bundled connect and error pages |
-| `resources/` | Icons and, later, the bundled mpv |
+| `resources/` | Icons, and the Windows mpv (`resources/mpv/`, git-ignored, filled by `npm run fetch-mpv` from the pin in `scripts/mpv-windows.json`) |
 
 ## Rules
 
