@@ -1,4 +1,4 @@
-import type { OpenRequest, PlayerCommand, ScrubSpriteSpec, TrackRef } from '../shared/bridge';
+import type { ChromeIntent, OpenRequest, PlayerCommand, ScrubSpriteSpec, TrackRef } from '../shared/bridge';
 import { isServerPage } from './navigation';
 import type { IpcValue } from './values';
 import { hasOnlyKeys, isFiniteNumber, isRecord, stringOrNull } from './values';
@@ -93,4 +93,33 @@ export function scrubSpriteFrom(value: IpcValue): ScrubSpriteSpec | null | undef
         parsed.push({ start, end, x, y });
     }
     return { image, cueWidth, cueHeight, cues: parsed };
+}
+
+const MAX_INTENT_ID = 200;
+
+export function chromeIntentFrom(value: IpcValue): ChromeIntent | null {
+    if (!isRecord(value)) return null;
+    switch (value.type) {
+        case 'toggle-pause':
+        case 'skip-marker':
+        case 'play-next':
+        case 'play-previous':
+        case 'cancel-up-next':
+        case 'exit':
+            return hasOnlyKeys(value, ['type']) ? { type: value.type } : null;
+        case 'seek':
+            return hasOnlyKeys(value, ['type', 'to']) && isFiniteNumber(value.to) && value.to >= 0 ? { type: 'seek', to: value.to } : null;
+        case 'select-audio':
+        case 'select-quality':
+            return hasOnlyKeys(value, ['type', 'id']) && typeof value.id === 'string' && value.id.length <= MAX_INTENT_ID
+                ? { type: value.type, id: value.id }
+                : null;
+        case 'select-subtitle': {
+            if (!hasOnlyKeys(value, ['type', 'id'])) return null;
+            const id = stringOrNull(value.id, MAX_INTENT_ID);
+            return id === undefined ? null : { type: 'select-subtitle', id };
+        }
+        default:
+            return null;
+    }
 }

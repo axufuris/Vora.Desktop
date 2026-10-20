@@ -6,6 +6,7 @@ import { desktopCapabilities } from './capabilities';
 import type { ConnectFlow } from './connectFlow';
 import { settingsPatchFrom, type DesktopSettingsStore } from './desktopSettings';
 import type { FileLogger } from './logger';
+import type { MpvBinary } from './mpvDiscovery';
 import type { PageAccess } from './navigation';
 import type { Player } from './player';
 import { openRequestFrom, playerCommandFrom, scrubSpriteFrom } from './playerRequests';
@@ -25,6 +26,7 @@ export interface BridgeContext {
     settings: DesktopSettingsStore;
     connect: ConnectFlow;
     player: Player;
+    mpv: () => MpvBinary | null;
     logger: FileLogger;
 }
 
@@ -86,7 +88,7 @@ export function registerBridge(context: BridgeContext): void {
         return desktopCapabilities({
             width: Math.round(display.size.width * display.scaleFactor),
             height: Math.round(display.size.height * display.scaleFactor),
-        });
+        }, context.mpv());
     });
 
     handle(Ipc.settingsGet, 'server', (): DesktopSettings => context.settings.get());

@@ -1,14 +1,17 @@
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, dialog, Menu, session, type BrowserWindow } from 'electron';
-import type { DesktopChannel, DesktopPlatform } from '../shared/bridge';
+import type { DesktopChannel, DesktopPlatform, MpvStatus } from '../shared/bridge';
+import { Ipc } from '../shared/shell';
 import { registerBridge } from './bridgeRouter';
 import { CertTrust, fingerprintOf } from './certTrust';
 import { ConnectFlow } from './connectFlow';
 import { DesktopSettingsStore } from './desktopSettings';
 import { FileLogger } from './logger';
 import { buildMenu } from './menu';
-import { NoPlayer } from './player';
+import { discoverMpv, readOsRelease, type MpvDiscovery } from './mpvDiscovery';
+import { MpvHost } from './mpvHost';
 import { normaliseServerUrl } from './serverProbe';
 import { ServerStore } from './serverStore';
 import { WindowManager } from './windowManager';
@@ -21,6 +24,11 @@ const channel: DesktopChannel = __VORA_CHANNEL__;
 const platform: DesktopPlatform = process.platform === 'win32' ? 'windows' : 'linux';
 const devServerUrl = !app.isPackaged ? normaliseServerUrl(process.env.VORA_DESKTOP_DEV_URL ?? '') : null;
 const devRendererUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL ?? null : null;
+const MPV_RECHECK_MS = 5000;
+
+function sameStatus(a: MpvStatus, b: MpvStatus): boolean {
+    return a.available === b.available && a.version === b.version && a.reason === b.reason;
+}
 
 function showAbout(window: BrowserWindow | null): void {
     const options = {
@@ -38,7 +46,7 @@ function showAbout(window: BrowserWindow | null): void {
     void (window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options));
 }
 
-function start(): void {
+async function start(): Promise<void> {
     const userData = app.getPath('userData');
     const logger = new FileLogger(join(userData, 'logs'), 'vora-desktop.log');
     logger.info(`Vora Desktop ${app.getVersion()} (${channel}) starting`, `Electron ${process.versions.electron} on ${process.platform}`);
@@ -117,7 +125,51 @@ function start(): void {
             return Promise.resolve();
         },
     });
-    registerBridge({ shellVersion: app.getVersion(), channel, platform, window, servers, settings, connect, player: new NoPlayer(), logger });
+    const osRelease = readOsRelease(platform);
+    const findMpv = () => discoverMpv({
+        platform,
+        bundledFolder: app.isPackaged ? join(process.resourcesPath, 'mpv') : join(app.getAppPath(), 'resources', 'mpv'),
+        pathVariable: process.env.PATH,
+        probeFolder: join(userData, 'tmp'),
+        osRelease,
+    });
+    let mpv: MpvDiscovery = { status: { available: false, version: null, reason: null }, binary: null };
+    let lastMpvCheck = 0;
+    const checkMpv = async (): Promise<void> => {
+        lastMpvCheck = Date.now();
+        const found = await findMpv();
+        const changed = !sameStatus(found.status, mpv.status);
+        mpv = found;
+        if (!changed) return;
+        logger.info(found.status.available ? `Found mpv ${found.status.version ?? ''}` : 'mpv is not available', found.binary?.path ?? found.status.reason ?? undefined);
+        window.sendToServerPage(Ipc.mpvChanged, found.status);
+    };
+
+    const player = new MpvHost({
+        platform,
+        folders: {
+            runtime: join(userData, 'mpv-runtime'),
+            temp: join(userData, 'tmp'),
+            logs: join(userData, 'logs'),
+            sockets: process.env.XDG_RUNTIME_DIR || tmpdir(),
+        },
+        discovery: () => mpv,
+        settings: () => settings.get(),
+        advancedConf: () => join(settings.ensureAdvancedFolder(), 'mpv.conf'),
+        verifyTls: url => {
+            try {
+                return trust.pinnedFingerprint(new URL(url).hostname) === null;
+            } catch {
+                return true;
+            }
+        },
+        window: { hide: () => window.hideForPlayback(), restore: () => window.focus() },
+        send: event => window.sendToServerPage(Ipc.playerEvent, event),
+        logger,
+    });
+    app.on('will-quit', () => player.dispose());
+
+    registerBridge({ shellVersion: app.getVersion(), channel, platform, window, servers, settings, connect, player, mpv: () => mpv.binary, logger });
 
     Menu.setApplicationMenu(buildMenu({
         switchServer: () => window.showConnect(),
@@ -127,7 +179,13 @@ function start(): void {
         devTools,
     }));
 
-    window.create();
+    const browserWindow = window.create();
+    browserWindow.on('focus', () => {
+        if (mpv.status.available || player.isPlaying || Date.now() - lastMpvCheck < MPV_RECHECK_MS) return;
+        checkMpv().catch((error: unknown) => logger.warn('Could not look for mpv again', error));
+    });
+    await checkMpv().catch((error: unknown) => logger.warn('Could not look for mpv', error));
+
     const last = servers.last();
     if (devServerUrl) window.showServer({ id: 'dev', url: devServerUrl, name: 'Vora (development)', lastUsedAt: new Date().toISOString() });
     else if (last) window.showServer(last);
