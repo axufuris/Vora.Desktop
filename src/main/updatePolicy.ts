@@ -2,7 +2,12 @@ import type { DesktopChannel, DesktopPlatform } from '../shared/bridge';
 
 export const RELEASES_URL = 'https://github.com/axufuris/Vora.Desktop/releases';
 export const FIRST_CHECK_MS = 30 * 1000;
-export const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
+export const CHECK_EVERY_MS = 60 * 60 * 1000;
+export const FOCUS_CHECK_GAP_MS = 15 * 60 * 1000;
+
+export function dueOnFocus(lastCheckedAt: number | null, now: number): boolean {
+    return lastCheckedAt !== null && now - lastCheckedAt >= FOCUS_CHECK_GAP_MS;
+}
 
 export type InstallKind = 'self-updating' | 'package';
 

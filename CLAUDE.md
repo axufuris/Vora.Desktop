@@ -21,7 +21,9 @@ in mpv (doc 04) under a Lua chrome that copies the web player; installers and re
 | `src/player/` | What mpv loads: the chrome (`vora/main.lua` for state, input and timers, `view.lua` for the layout, `draw.lua` for ASS drawing, `icons.lua` generated), `input.conf` (every key and mouse event goes to the chrome), `icons/` (the web player's SVGs) and `fonts/` (Inter, SIL OFL) |
 | `docs/player-parity.md` | Every web player element and where it is in the desktop player |
 | `electron-builder.config.ts` | The installers: one config, QA or prod from `VORA_CHANNEL`, fuses, bundled mpv and player files |
-| `src/main/updater.ts`, `updatePolicy.ts` | Auto-update from GitHub Releases, per channel; never prompts during playback |
+| `src/main/updater.ts`, `updatePolicy.ts` | Auto-update from GitHub Releases, per channel: 30 s after start, hourly, and on focus after 15 min; never prompts during playback |
+| `src/main/appIdentity.ts` | Each app's id, name, executable name, icon and Windows notification id; the builder config and the app both read it |
+| `src/main/notificationShortcut.ts`, `notificationRegistration.ts` | Puts the app id and notification id on the Start menu shortcut at startup, which Windows needs before it shows a notification |
 | `.github/workflows/` | `pr.yml` (checks, mpv, bridge, installers), `package.yml` (the shared packaging), `qa.yml` (a QA prerelease per push to `main`), `release.yml` (prod installers for a published release) |
 | `.github/RELEASING.md` | How to release, the unsigned installers, and the Linux release notes |
 | `resources/` | Icons, and the Windows mpv (`resources/mpv/`, git-ignored, filled by `npm run fetch-mpv` from the pin in `scripts/mpv-windows.json`) |
@@ -48,6 +50,14 @@ in mpv (doc 04) under a Lua chrome that copies the web player; installers and re
   value there). The `Player with mpv` check runs the chrome in that version.
 - **`icons.lua` is generated.** Change an SVG in `src/player/icons/` and run
   `npm run build-icons`; a test fails when the two disagree.
+- **QA and prod differ only through `appIdentity.ts`.** Never hard-code an app id, name or
+  icon elsewhere. The packaged `productName` must be the app's own (`extraMetadata`): it
+  names `userData`, so a QA build that said "Vora" shared prod's settings.
+- **Windows shows a notification only for an app id a Start menu shortcut carries.** The
+  app sets its id and a fixed notification id (`setAppUserModelId`,
+  `setToastActivatorCLSID`) and writes both onto its shortcut at startup. Left to Electron,
+  the shortcut is rewritten when the first notification is shown, and Windows drops that
+  notification.
 - **State is JSON in `userData`,** written with `writeJson` (temp file, then rename).
 - **Ask before adding a dependency** the plan doesn't name.
 - **Before pushing:** `npm run lint` (0 errors, 0 warnings), `npm run typecheck`,

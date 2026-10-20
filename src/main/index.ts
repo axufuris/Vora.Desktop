@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { app, dialog, Menu, nativeImage, session, type BrowserWindow } from 'electron';
 import type { DesktopChannel, DesktopPlatform, MpvStatus } from '../shared/bridge';
 import { Ipc } from '../shared/shell';
+import { appIdentity } from './appIdentity';
 import { registerBridge } from './bridgeRouter';
 import { CertTrust, fingerprintOf } from './certTrust';
 import { ConnectFlow } from './connectFlow';
@@ -12,6 +13,7 @@ import { FileLogger } from './logger';
 import { buildMenu } from './menu';
 import { discoverMpv, readOsRelease, type MpvDiscovery } from './mpvDiscovery';
 import { MpvHost } from './mpvHost';
+import { prepareWindowsNotifications } from './notificationRegistration';
 import { normaliseServerUrl } from './serverProbe';
 import { ServerStore } from './serverStore';
 import { Updater } from './updater';
@@ -22,6 +24,7 @@ const VERIFY_ACCEPT = 0;
 const VERIFY_USE_CHROMIUM = -3;
 
 const channel: DesktopChannel = __VORA_CHANNEL__;
+const identity = appIdentity(channel);
 const platform: DesktopPlatform = process.platform === 'win32' ? 'windows' : 'linux';
 const devServerUrl = !app.isPackaged ? normaliseServerUrl(process.env.VORA_DESKTOP_DEV_URL ?? '') : null;
 const devRendererUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL ?? null : null;
@@ -52,6 +55,7 @@ async function start(): Promise<void> {
     const logger = new FileLogger(join(userData, 'logs'), 'vora-desktop.log');
     logger.info(`Vora Desktop ${app.getVersion()} (${channel}) starting`, `Electron ${process.versions.electron} on ${process.platform}`);
     process.on('unhandledRejection', reason => logger.error('Unhandled rejection', reason));
+    if (platform === 'windows' && app.isPackaged) prepareWindowsNotifications(identity, logger);
 
     const servers = new ServerStore(join(userData, 'servers.json'));
     const trust = new CertTrust(join(userData, 'certTrust.json'));
@@ -60,8 +64,8 @@ async function start(): Promise<void> {
     const devTools = !app.isPackaged || channel === 'qa';
 
     const window = new WindowManager({
-        title: channel === 'qa' ? 'Vora QA' : 'Vora',
-        icon: join(__dirname, channel === 'qa' ? '../../resources/icons/qa/vora-512.png' : '../../resources/icons/vora-512.png'),
+        title: identity.productName,
+        icon: join(__dirname, '../..', identity.icon),
         preload: join(__dirname, '../preload/index.js'),
         userData,
         pages: { devPagesOrigin: devRendererUrl ? new URL(devRendererUrl).origin : null, pagesFolderUrl: pathToFileURL(rendererFolder).href },
@@ -193,6 +197,7 @@ async function start(): Promise<void> {
     updater = new Updater({ channel, platform, logger, isPlaying: () => player.isPlaying, readyChanged: setMenu });
 
     const browserWindow = window.create();
+    browserWindow.on('focus', () => updater?.checkIfDue());
     browserWindow.on('focus', () => {
         if (mpv.status.available || player.isPlaying || Date.now() - lastMpvCheck < MPV_RECHECK_MS) return;
         checkMpv().catch((error: unknown) => logger.warn('Could not look for mpv again', error));
@@ -208,7 +213,11 @@ async function start(): Promise<void> {
     updater.start();
 }
 
-if (platform === 'linux') app.setDesktopName(channel === 'qa' ? 'vora-desktop-qa.desktop' : 'vora-desktop.desktop');
+if (platform === 'linux') app.setDesktopName(`${identity.executableName}.desktop`);
+if (platform === 'windows') {
+    app.setAppUserModelId(identity.appId);
+    app.setToastActivatorCLSID(identity.toastActivator);
+}
 
 if (!app.requestSingleInstanceLock()) {
     app.quit();
