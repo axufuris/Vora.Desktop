@@ -1,7 +1,7 @@
 name: PR Checks
 
-# The checks branch protection requires on main. Packaging the installers on
-# Windows and Linux joins this workflow with the release workflows.
+# The checks branch protection requires on main, and a packaging run that
+# proves the Windows and Linux installers still build.
 on:
   pull_request:
     branches: [ main ]
@@ -75,6 +75,16 @@ jobs:
         run: npx vitest run src/main/mpvHost.integration.test.ts
         env:
           VORA_REQUIRE_MPV: '1'
+
+  # Proves the installers still build. The QA and release workflows use the
+  # same packaging, so a PR that passes here packages the same way there.
+  package:
+    name: Installers
+    needs: checks
+    uses: ./.github/workflows/package.yml
+    with:
+      channel: prod
+      retention-days: 7
 
   bridge:
     name: Bridge contract

@@ -1,0 +1,97 @@
+name: Package
+
+# Builds the installers for one channel on Windows and Linux. The PR, QA and
+# release workflows all call this one, so the three build exactly the same way.
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: qa or prod
+        type: string
+        required: true
+      version:
+        description: Replaces package.json's version for this build; empty keeps it
+        type: string
+        default: ''
+      ref:
+        description: What to check out; empty is the commit that started the run
+        type: string
+        default: ''
+      retention-days:
+        type: number
+        default: 7
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            target: --win
+          # An older glibc than ubuntu-latest, so the AppImage starts on more
+          # distributions.
+          - name: Linux
+            os: ubuntu-22.04
+            target: --linux
+    runs-on: ${{ matrix.os }}
+    env:
+      VORA_CHANNEL: ${{ inputs.channel }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install rpm
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm
+
+      - name: Install
+        run: npm ci
+
+      # QA builds are X.Y.Z-qa.N. The change stays in this checkout; nothing is
+      # committed.
+      - name: Set the version
+        if: inputs.version != ''
+        shell: bash
+        run: npm version "${{ inputs.version }}" --no-git-tag-version
+
+      # The installer bundles the mpv pinned in scripts/mpv-windows.json; the
+      # script checks its SHA-256 and fails the build on a mismatch.
+      - name: Fetch mpv
+        if: runner.os == 'Windows'
+        run: npm run fetch-mpv
+
+      - name: Build
+        run: npm run build
+
+      - name: Package
+        shell: bash
+        run: npx electron-builder --config electron-builder.config.ts ${{ matrix.target }} --x64 --publish never
+
+      # The .yml and .blockmap files are what auto-update reads; a release
+      # without them cannot update.
+      - uses: actions/upload-artifact@v6
+        with:
+          name: installers-${{ matrix.name }}
+          retention-days: ${{ inputs.retention-days }}
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/latest*.yml
+            dist/qa*.yml

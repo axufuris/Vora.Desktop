@@ -1,0 +1,108 @@
+name: Release
+
+# Publishing a GitHub Release vX.Y.Z builds the prod installers from that tag
+# and attaches them. electron-builder will not upload to a release that is
+# already published, so it builds with --publish never and gh uploads.
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag to build, for example v1.0.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: Check the tag
+    # QA prereleases have their own workflow.
+    if: github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && !contains(github.event.release.tag_name, '-qa.'))
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - id: tag
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          case "$TAG" in
+            *-qa.*) echo "::error::$TAG is a QA tag; QA builds come from the QA release workflow."; exit 1 ;;
+          esac
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - name: The tag matches package.json
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$expected" ]; then
+            echo "::error::The tag is $TAG but package.json says $expected. Tag the commit whose package.json has the version you are releasing."
+            exit 1
+          fi
+
+  checks:
+    name: Checks
+    needs: tag
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Lint
+        run: npm run lint -- --max-warnings 0
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+  package:
+    needs: [ tag, checks ]
+    uses: ./.github/workflows/package.yml
+    with:
+      channel: prod
+      ref: ${{ needs.tag.outputs.tag }}
+      retention-days: 3
+
+  upload:
+    name: Upload
+    needs: [ tag, package ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.tag.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: installers-*
+          merge-multiple: true
+          path: dist
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum -- * > SHA256SUMS.txt
+
+      - name: Attach to the release
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"

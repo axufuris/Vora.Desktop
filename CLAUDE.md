@@ -20,6 +20,10 @@ in mpv (doc 04) under a Lua chrome that copies the web player; installers and re
 | `src/pages/` | The bundled connect and error pages |
 | `src/player/` | What mpv loads: the chrome (`vora/main.lua` for state, input and timers, `view.lua` for the layout, `draw.lua` for ASS drawing, `icons.lua` generated), `input.conf` (every key and mouse event goes to the chrome), `icons/` (the web player's SVGs) and `fonts/` (Inter, SIL OFL) |
 | `docs/player-parity.md` | Every web player element and where it is in the desktop player |
+| `electron-builder.config.ts` | The installers: one config, QA or prod from `VORA_CHANNEL`, fuses, bundled mpv and player files |
+| `src/main/updater.ts`, `updatePolicy.ts` | Auto-update from GitHub Releases, per channel; never prompts during playback |
+| `.github/workflows/` | `pr.yml` (checks, mpv, bridge, installers), `package.yml` (the shared packaging), `qa.yml` (a QA prerelease per push to `main`), `release.yml` (prod installers for a published release) |
+| `.github/RELEASING.md` | How to release, the unsigned installers, and the Linux release notes |
 | `resources/` | Icons, and the Windows mpv (`resources/mpv/`, git-ignored, filled by `npm run fetch-mpv` from the pin in `scripts/mpv-windows.json`) |
 
 ## Rules

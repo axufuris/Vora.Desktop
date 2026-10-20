@@ -1,0 +1,113 @@
+name: QA release
+
+# Every push to main becomes a QA prerelease, X.Y.Z-qa.<run number>, that QA
+# installs update to. Prod builds never see these: they read the latest
+# channel, QA reads the qa channel.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# A newer push makes the build in progress pointless.
+concurrency:
+  group: qa
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Lint
+        run: npm run lint -- --max-warnings 0
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: version
+        run: echo "version=$(node -p "require('./package.json').version")-qa.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  package:
+    needs: [ checks, version ]
+    uses: ./.github/workflows/package.yml
+    with:
+      channel: qa
+      version: ${{ needs.version.outputs.version }}
+      retention-days: 3
+
+  publish:
+    name: Publish
+    needs: [ version, package ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      # The whole history, so the notes can list what changed since the last QA tag.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: installers-*
+          merge-multiple: true
+          path: dist
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum -- * > SHA256SUMS.txt
+
+      - name: Notes
+        run: |
+          previous=$(git tag --list 'v*-qa.*' --sort=-creatordate | head -n 1)
+          {
+            echo "QA build of ${GITHUB_SHA::7}. QA installs update to it on their own; prod installs never do."
+            echo
+            if [ -n "$previous" ]; then
+              echo "Changes since $previous:"
+              git log --format='- %s' "$previous..$GITHUB_SHA"
+            else
+              echo "Recent changes:"
+              git log --format='- %s' -n 20 "$GITHUB_SHA"
+            fi
+          } > notes.md
+
+      - name: Release
+        run: gh release create "v$VERSION" dist/* --prerelease --target "$GITHUB_SHA" --title "Vora Desktop QA $VERSION" --notes-file notes.md
+
+      # gh lists the newest first, so everything after the tenth QA build goes.
+      - name: Keep the ten newest QA builds
+        run: |
+          gh release list --limit 200 --json tagName,isPrerelease --jq '.[] | select(.isPrerelease and (.tagName | contains("-qa."))) | .tagName' \
+            | tail -n +11 \
+            | xargs -r -n 1 gh release delete --yes --cleanup-tag
