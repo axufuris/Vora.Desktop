@@ -12,7 +12,18 @@ server's self-signed certificate, the security lock-down, the `window.voraDeskto
 and the desktop player settings) and the mpv player. Movies, episodes and extras play in
 mpv, straight from the file, under the Vora player controls: the web player's look,
 drawn inside mpv by `src/player/vora/` so HDR output is untouched (see
-[docs/player-parity.md](docs/player-parity.md)). Installers come with the release workflows.
+[docs/player-parity.md](docs/player-parity.md)).
+
+## Download
+
+Installers for Windows (per user, no admin) and Linux (AppImage, `.deb`, `.rpm`) are on the
+[releases page](https://github.com/axufuris/Vora.Desktop/releases). The Windows installer
+and the AppImage update themselves; the `.deb` and `.rpm` say when a new version is out.
+The installers aren't signed, so Windows asks before the first install: choose **More info**,
+then **Run anyway**.
+Prereleases named `QA` are test builds of `main`: they install beside the normal app as
+"Vora QA" and update only to newer QA builds. How releases are made is in
+[.github/RELEASING.md](.github/RELEASING.md).
 
 mpv comes from:
 
@@ -49,6 +60,8 @@ VORA_DESKTOP_DEV_URL=http://localhost:5173 npm run dev
 | `npm run typecheck` | TypeScript, main and pages |
 | `npm run fetch-mpv` | Downloads the pinned Windows mpv into `resources/mpv/` and checks its SHA-256 |
 | `npm run build-icons` | Turns the SVGs in `src/player/icons/` (the web player's) into `src/player/vora/icons.lua` |
+| `npm run package:win` | Builds the Windows installer into `dist/` (run `fetch-mpv` first) |
+| `npm run package:linux` | Builds the AppImage, `.deb` and `.rpm` into `dist/` (on Linux, with `rpm` installed) |
 
 `src/main/mpvHost.integration.test.ts` plays a generated video in the real mpv. It runs
 when an mpv the app accepts and FFmpeg are found (`VORA_TEST_FFMPEG` points at an FFmpeg

@@ -6,6 +6,8 @@ export interface MenuActions {
     toggleFullScreen(): void;
     about(): void;
     devTools: boolean;
+    updateReady: string | null;
+    restartToUpdate(): void;
 }
 
 export function buildMenu(actions: MenuActions): Menu {
@@ -18,6 +20,7 @@ export function buildMenu(actions: MenuActions): Menu {
                 { label: 'Toggle full screen', accelerator: 'F11', click: () => actions.toggleFullScreen() },
                 { type: 'separator' },
                 { label: 'About Vora Desktop', click: () => actions.about() },
+                ...(actions.updateReady ? [{ label: `Restart to update to ${actions.updateReady}`, click: () => actions.restartToUpdate() }] : []),
                 { type: 'separator' },
                 { role: 'quit' },
             ],

@@ -14,6 +14,7 @@ import { discoverMpv, readOsRelease, type MpvDiscovery } from './mpvDiscovery';
 import { MpvHost } from './mpvHost';
 import { normaliseServerUrl } from './serverProbe';
 import { ServerStore } from './serverStore';
+import { Updater } from './updater';
 import { WindowManager } from './windowManager';
 
 const ALLOWED_PERMISSIONS = new Set(['fullscreen', 'clipboard-sanitized-write']);
@@ -60,7 +61,7 @@ async function start(): Promise<void> {
 
     const window = new WindowManager({
         title: channel === 'qa' ? 'Vora QA' : 'Vora',
-        icon: join(__dirname, '../../resources/icons/vora-512.png'),
+        icon: join(__dirname, channel === 'qa' ? '../../resources/icons/qa/vora-512.png' : '../../resources/icons/vora-512.png'),
         preload: join(__dirname, '../preload/index.js'),
         userData,
         pages: { devPagesOrigin: devRendererUrl ? new URL(devRendererUrl).origin : null, pagesFolderUrl: pathToFileURL(rendererFolder).href },
@@ -178,13 +179,18 @@ async function start(): Promise<void> {
 
     registerBridge({ shellVersion: app.getVersion(), channel, platform, window, servers, settings, connect, player, mpv: () => mpv.binary, logger });
 
-    Menu.setApplicationMenu(buildMenu({
+    let updater: Updater | null = null;
+    const setMenu = (updateReady: string | null) => Menu.setApplicationMenu(buildMenu({
         switchServer: () => window.showConnect(),
         reload: () => window.reload(),
         toggleFullScreen: () => window.toggleFullScreen(),
         about: () => showAbout(window.browserWindow),
         devTools,
+        updateReady,
+        restartToUpdate: () => updater?.restartToUpdate(),
     }));
+    setMenu(null);
+    updater = new Updater({ channel, platform, logger, isPlaying: () => player.isPlaying, readyChanged: setMenu });
 
     const browserWindow = window.create();
     browserWindow.on('focus', () => {
@@ -199,7 +205,10 @@ async function start(): Promise<void> {
     else window.showConnect();
 
     app.on('second-instance', () => window.focus());
+    updater.start();
 }
+
+if (platform === 'linux') app.setDesktopName(channel === 'qa' ? 'vora-desktop-qa.desktop' : 'vora-desktop.desktop');
 
 if (!app.requestSingleInstanceLock()) {
     app.quit();

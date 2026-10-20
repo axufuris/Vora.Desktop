@@ -17,5 +17,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src/main", "src/preload", "src/shared", "scripts", "electron.vite.config.mts", "vitest.config.mts"]
+  "include": ["src/main", "src/preload", "src/shared", "scripts", "electron.vite.config.mts", "vitest.config.mts", "electron-builder.config.ts"]
 }
