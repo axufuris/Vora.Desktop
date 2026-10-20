@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { createReadStream, mkdtempSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -81,26 +81,34 @@ function serve(file: string): Promise<Server> {
 }
 
 class Harness {
+    readonly playerFolder: string | null;
     readonly events: PlayerEvent[] = [];
     hidden = 0;
     restored = 0;
     readonly folders = { runtime: join(work, 'runtime'), temp: join(work, 'temp'), logs: join(work, 'logs'), sockets: tmpdir() };
-    readonly host = new MpvHost({
-        platform,
-        folders: this.folders,
-        discovery: () => mpv,
-        settings: () => DefaultSettings,
-        advancedConf: () => {
-            const conf = join(work, 'user-mpv.conf');
-            writeFileSync(conf, '', 'utf8');
-            return conf;
-        },
-        verifyTls: () => true,
-        window: { hide: () => { this.hidden++; }, restore: () => { this.restored++; } },
-        send: event => { this.events.push(event); },
-        logger: { info: () => undefined, warn: () => undefined },
-        extraArguments: ['--vo=null', '--ao=null', '--fullscreen=no', '--force-window=no'],
-    });
+    readonly host: MpvHost;
+
+    constructor(playerFolder: string | null = null) {
+        this.playerFolder = playerFolder;
+        this.host = new MpvHost({
+            platform,
+            folders: this.folders,
+            discovery: () => mpv,
+            settings: () => DefaultSettings,
+            advancedConf: () => {
+                const conf = join(work, 'user-mpv.conf');
+                writeFileSync(conf, '', 'utf8');
+                return conf;
+            },
+            verifyTls: () => true,
+            window: { hide: () => { this.hidden++; }, restore: () => { this.restored++; } },
+            send: event => { this.events.push(event); },
+            logger: { info: () => undefined, warn: () => undefined },
+            playerFolder: this.playerFolder,
+            decodeImage: () => ({ width: 64, height: 36, bgra: Buffer.alloc(64 * 36 * 4, 128) }),
+            extraArguments: ['--vo=null', '--ao=null', '--fullscreen=no', '--force-window=no'],
+        });
+    }
 
     async until<T extends PlayerEvent>(test: (event: PlayerEvent) => event is T, from = 0, timeoutMs = 15_000): Promise<T> {
         const deadline = Date.now() + timeoutMs;
@@ -188,6 +196,36 @@ describe.skipIf(!ready && !required)('the Vora player with a real mpv', () => {
         expect(host.isPlaying).toBe(false);
         probe.close();
     }, 60_000);
+
+    it('draws the Vora chrome in this mpv without a script error', async () => {
+        const harness = new Harness(join(process.cwd(), 'src', 'player'));
+        const { host } = harness;
+        await host.open({ url, startSeconds: 1, title: 'Fixture', audioTrack: null, subtitleTrack: null });
+        await harness.until(is('loaded'));
+        host.setChromeState({
+            title: 'Fixture', subtitle: 'S1 E1 - Test', theme: { accent: '#e8a33d', surface: '#16161d', text: '#f4f4f6', textMuted: '#9a9aa8' },
+            status: 'playing', statusText: null, markers: [{ kind: 'Intro', start: 1, end: 2 }], skip: { label: 'Skip Intro' },
+            upNext: { title: 'Next', subtitle: null, countdownSeconds: 5 },
+            audio: [{ id: 'a1', label: 'English', detail: 'AAC', selected: true }], subtitles: [{ id: 's1', label: 'English', detail: null, selected: false }],
+            quality: { options: [{ id: 'v1', label: '240p', selected: true }], currentLabel: '240p · Direct Play' },
+            info: [{ label: 'Video', value: '240p · MPEG-4' }], canPlayNext: true, canPlayPrevious: true,
+        });
+        host.setScrubSprite({ image: new ArrayBuffer(8), cueWidth: 32, cueHeight: 18, cues: [{ start: 0, end: 8, x: 32, y: 18 }] });
+
+        const probe = await harness.probe(1);
+        for (const key of ['UP', 'RIGHT', 'RIGHT', 'UP', 'RIGHT', 'ENTER', 'DOWN', 'DOWN', 'LEFT', 'ESC', 'm', '0', '9']) {
+            await probe.command(['keypress', key]);
+        }
+        await probe.command(['mouse', 100, 100]);
+        await new Promise(resolve => setTimeout(resolve, 600));
+        probe.close();
+        await host.close();
+
+        const log = join(harness.folders.logs, 'mpv.log');
+        const lines = existsSync(log) ? readFileSync(log, 'utf8').split(/\r?\n/) : [];
+        expect(lines.some(line => line.includes('The Vora player chrome is ready'))).toBe(true);
+        expect(lines.filter(line => /\]\[(e|f)\]\[vora\]|stack traceback|attempt to (index|call|compare|perform)/.test(line))).toEqual([]);
+    }, 30_000);
 
     it('reports a video the server could not send', async () => {
         const harness = new Harness();

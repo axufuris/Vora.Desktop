@@ -8,7 +8,7 @@ in VoraMediaServer.
 ## What this repo is
 
 An Electron shell that loads the Vora web client from the user's own server and plays video
-in mpv (doc 04). The Lua player chrome is the next phase; installers and releases are doc 05.
+in mpv (doc 04) under a Lua chrome that copies the web player; installers and releases are doc 05.
 
 | Path | Holds |
 | --- | --- |
@@ -18,6 +18,8 @@ in mpv (doc 04). The Lua player chrome is the next phase; installers and release
 | `src/shared/bridge.ts` | The bridge contract, a byte-for-byte copy of `VoraMediaServer/src/Vora.Web/src/desktop/desktopBridge.ts` |
 | `src/shared/shell.ts` | IPC channel names and the bundled pages' API |
 | `src/pages/` | The bundled connect and error pages |
+| `src/player/` | What mpv loads: the chrome (`vora/main.lua` for state, input and timers, `view.lua` for the layout, `draw.lua` for ASS drawing, `icons.lua` generated), `input.conf` (every key and mouse event goes to the chrome), `icons/` (the web player's SVGs) and `fonts/` (Inter, SIL OFL) |
+| `docs/player-parity.md` | Every web player element and where it is in the desktop player |
 | `resources/` | Icons, and the Windows mpv (`resources/mpv/`, git-ignored, filled by `npm run fetch-mpv` from the pin in `scripts/mpv-windows.json`) |
 
 ## Rules
@@ -35,7 +37,13 @@ in mpv (doc 04). The Lua player chrome is the next phase; installers and release
   a saved Vora server. Never hand mpv or `shell.openPath` a path or address that came from
   the renderer unchecked. Never add `--no-sandbox`, `nodeIntegration` or webviews.
 - **No Vora logic in the shell or in Lua.** What plays, when auto-skip fires and what Up
-  Next shows are decided in Vora.Web's `usePlaybackController`.
+  Next shows are decided in Vora.Web's `usePlaybackController`. The chrome draws
+  `PlayerChromeState` and sends `ChromeIntent`s; only volume, mute and fullscreen are its own.
+- **The chrome must run on mpv 0.37** (Ubuntu 24.04's). Keep Lua to what that version has,
+  and take one value from calls that may return more (`format_json` returns a second
+  value there). The `Player with mpv` check runs the chrome in that version.
+- **`icons.lua` is generated.** Change an SVG in `src/player/icons/` and run
+  `npm run build-icons`; a test fails when the two disagree.
 - **State is JSON in `userData`,** written with `writeJson` (temp file, then rename).
 - **Ask before adding a dependency** the plan doesn't name.
 - **Before pushing:** `npm run lint` (0 errors, 0 warnings), `npm run typecheck`,

@@ -9,7 +9,7 @@ import type { FileLogger } from './logger';
 import type { MpvBinary } from './mpvDiscovery';
 import type { PageAccess } from './navigation';
 import type { Player } from './player';
-import { openRequestFrom, playerCommandFrom, scrubSpriteFrom } from './playerRequests';
+import { chromeStateFrom, openRequestFrom, playerCommandFrom, scrubSpriteFrom } from './playerRequests';
 import type { ServerStore } from './serverStore';
 import type { WindowManager } from './windowManager';
 import type { IpcValue } from './values';
@@ -116,10 +116,16 @@ export function registerBridge(context: BridgeContext): void {
         else logger.warn('Ignored a player command that was not understood');
     });
 
-    listen(Ipc.playerChromeState, ['server'], () => undefined);
+    listen(Ipc.playerChromeState, ['server'], state => {
+        const valid = chromeStateFrom(state);
+        if (valid) context.player.setChromeState(valid);
+        else logger.warn('Ignored player chrome state that was not understood');
+    });
 
     handle(Ipc.playerScrubSprite, 'server', (spec): void => {
-        if (scrubSpriteFrom(spec) === undefined) throw new Error('The scrub thumbnails were not understood.');
+        const valid = scrubSpriteFrom(spec);
+        if (valid === undefined) throw new Error('The scrub thumbnails were not understood.');
+        context.player.setScrubSprite(valid);
     });
 
     handle(Ipc.playerClose, 'server', (): Promise<void> => context.player.close());

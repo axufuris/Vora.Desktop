@@ -4,7 +4,7 @@ import { DefaultSettings } from './desktopSettings';
 import { ipcPathFor, mpvLaunchArguments, mpvPathValue, runtimeMpvConf, spdifCodecs } from './mpvConfig';
 
 const conf = (settings: Partial<DesktopSettings>, platform: 'windows' | 'linux' = 'linux') =>
-    runtimeMpvConf({ platform, settings: { ...DefaultSettings, ...settings }, advancedConf: '/home/me/.config/Vora/mpv/mpv.conf' }).split('\n');
+    runtimeMpvConf({ platform, settings: { ...DefaultSettings, ...settings }, advancedConf: '/home/me/.config/Vora/mpv/mpv.conf', inputConf: null }).split('\n');
 
 describe('the mpv settings Vora writes', () => {
     it('outputs HDR with the hardware decoder and tracks chosen by Vora, ending with the user\'s own file', () => {
@@ -24,6 +24,13 @@ describe('the mpv settings Vora writes', () => {
         expect(spdifCodecs('off')).toBeNull();
     });
 
+    it('hands the keys, the mouse and the on-screen display to the Vora chrome when it is there', () => {
+        const lines = runtimeMpvConf({ platform: 'linux', settings: DefaultSettings, advancedConf: '/u/mpv.conf', inputConf: '/app/player/input.conf' }).split('\n');
+
+        expect(lines.slice(0, 7)).toEqual(['osc=no', 'osd-bar=no', 'osd-on-seek=no', 'input-default-bindings=no', 'input-conf=%22%/app/player/input.conf', 'osd-font=Inter', 'cursor-autohide=3000']);
+        expect(conf({}).some(line => line.startsWith('osc='))).toBe(false);
+    });
+
     it('writes a path with spaces and non-ASCII letters in mpv\'s length-prefixed form', () => {
         expect(mpvPathValue('C:\\Users\\Zoë Smith\\mpv.conf')).toBe('%28%C:\\Users\\Zoë Smith\\mpv.conf');
     });
@@ -31,10 +38,11 @@ describe('the mpv settings Vora writes', () => {
 
 describe('starting mpv', () => {
     it('isolates it from the user\'s own mpv and verifies certificates unless the server\'s is pinned', () => {
-        const args = mpvLaunchArguments({ configFolder: '/cfg', ipcPath: '/run/user/1000/vora-mpv-1-1.sock', logFile: '/logs/mpv.log', verifyTls: true });
+        const args = mpvLaunchArguments({ configFolder: '/cfg', ipcPath: '/run/user/1000/vora-mpv-1-1.sock', logFile: '/logs/mpv.log', verifyTls: true, script: null });
 
         expect(args).toEqual(['--config-dir=/cfg', '--load-scripts=no', '--input-ipc-server=/run/user/1000/vora-mpv-1-1.sock', '--idle=yes', '--force-window=yes', '--keep-open=yes', '--log-file=/logs/mpv.log', '--tls-verify=yes']);
-        expect(mpvLaunchArguments({ configFolder: '/cfg', ipcPath: 'p', logFile: 'l', verifyTls: false, extraArguments: ['--vo=null'] }).slice(-2)).toEqual(['--tls-verify=no', '--vo=null']);
+        expect(mpvLaunchArguments({ configFolder: '/cfg', ipcPath: 'p', logFile: 'l', verifyTls: false, script: '/app/player/vora', extraArguments: ['--vo=null'] }).slice(-3))
+            .toEqual(['--tls-verify=no', '--script=/app/player/vora', '--vo=null']);
     });
 
     it('talks to it over a named pipe on Windows and a socket on Linux', () => {

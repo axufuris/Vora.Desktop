@@ -5,6 +5,7 @@ export interface RuntimeConfigInput {
     platform: DesktopPlatform;
     settings: DesktopSettings;
     advancedConf: string;
+    inputConf: string | null;
 }
 
 export interface LaunchInput {
@@ -12,6 +13,7 @@ export interface LaunchInput {
     ipcPath: string;
     logFile: string;
     verifyTls: boolean;
+    script: string | null;
     extraArguments?: readonly string[];
 }
 
@@ -30,9 +32,23 @@ export function spdifCodecs(passthrough: AudioPassthrough): string | null {
     }
 }
 
-export function runtimeMpvConf({ platform, settings, advancedConf }: RuntimeConfigInput): string {
+export function chromeLines(inputConf: string | null): string[] {
+    if (!inputConf) return [];
+    return [
+        'osc=no',
+        'osd-bar=no',
+        'osd-on-seek=no',
+        'input-default-bindings=no',
+        `input-conf=${mpvPathValue(inputConf)}`,
+        'osd-font=Inter',
+        'cursor-autohide=3000',
+    ];
+}
+
+export function runtimeMpvConf({ platform, settings, advancedConf, inputConf }: RuntimeConfigInput): string {
     const spdif = spdifCodecs(settings.audioPassthrough);
     const lines = [
+        ...chromeLines(inputConf),
         'title=Vora',
         'fullscreen=yes',
         'vo=gpu-next',
@@ -57,7 +73,7 @@ export function runtimeMpvConf({ platform, settings, advancedConf }: RuntimeConf
     return `${lines.join('\n')}\n`;
 }
 
-export function mpvLaunchArguments({ configFolder, ipcPath, logFile, verifyTls, extraArguments = [] }: LaunchInput): string[] {
+export function mpvLaunchArguments({ configFolder, ipcPath, logFile, verifyTls, script, extraArguments = [] }: LaunchInput): string[] {
     return [
         `--config-dir=${configFolder}`,
         '--load-scripts=no',
@@ -67,6 +83,7 @@ export function mpvLaunchArguments({ configFolder, ipcPath, logFile, verifyTls, 
         '--keep-open=yes',
         `--log-file=${logFile}`,
         `--tls-verify=${verifyTls ? 'yes' : 'no'}`,
+        ...(script ? [`--script=${script}`] : []),
         ...extraArguments,
     ];
 }
