@@ -1,14 +1,13 @@
 import type { Configuration } from 'electron-builder';
+import { appIdentity } from './src/main/appIdentity';
 
 const qa = process.env.VORA_CHANNEL === 'qa';
-const productName = qa ? 'Vora QA' : 'Vora';
-const executableName = qa ? 'vora-desktop-qa' : 'vora-desktop';
-const icon = qa ? 'resources/icons/qa/vora-512.png' : 'resources/icons/vora-512.png';
+const { appId, productName, executableName, icon } = appIdentity(qa ? 'qa' : 'prod');
 
 const config: Configuration = {
-    appId: qa ? 'net.getvora.desktop.qa' : 'net.getvora.desktop',
+    appId,
     productName,
-    extraMetadata: { name: executableName },
+    extraMetadata: { name: executableName, productName },
     copyright: 'Copyright © The Vora authors',
     directories: { output: 'dist', buildResources: 'resources' },
     files: ['out/**/*', 'resources/icons/**/*', 'package.json'],

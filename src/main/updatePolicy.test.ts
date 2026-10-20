@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { installKind, noticeFor, releasePage, updateSettings } from './updatePolicy';
+import { CHECK_EVERY_MS, dueOnFocus, FIRST_CHECK_MS, FOCUS_CHECK_GAP_MS, installKind, noticeFor, releasePage, updateSettings } from './updatePolicy';
 
 describe('updating Vora Desktop', () => {
     it('updates itself on Windows and from an AppImage, and only points .deb and .rpm installs at the download', () => {
@@ -12,6 +12,13 @@ describe('updating Vora Desktop', () => {
         expect(updateSettings('qa', 'self-updating')).toEqual({ channel: 'qa', allowPrerelease: true, autoDownload: true, autoInstallOnAppQuit: true });
         expect(updateSettings('prod', 'self-updating')).toEqual({ channel: 'latest', allowPrerelease: false, autoDownload: true, autoInstallOnAppQuit: true });
         expect(updateSettings('prod', 'package')).toMatchObject({ autoDownload: false, autoInstallOnAppQuit: false });
+    });
+
+    it('looks 30 seconds after start, then every hour, and again on focus once 15 minutes have passed', () => {
+        expect([FIRST_CHECK_MS, CHECK_EVERY_MS, FOCUS_CHECK_GAP_MS]).toEqual([30_000, 3_600_000, 900_000]);
+        expect(dueOnFocus(null, 10_000_000)).toBe(false);
+        expect(dueOnFocus(1_000_000, 1_000_000 + FOCUS_CHECK_GAP_MS - 1)).toBe(false);
+        expect(dueOnFocus(1_000_000, 1_000_000 + FOCUS_CHECK_GAP_MS)).toBe(true);
     });
 
     it('says what to do with the new version', () => {
