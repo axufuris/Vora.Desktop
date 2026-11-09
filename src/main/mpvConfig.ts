@@ -45,12 +45,16 @@ export function chromeLines(inputConf: string | null): string[] {
     ];
 }
 
+function windowLines(startFullScreen: boolean): string[] {
+    return startFullScreen ? ['fullscreen=yes'] : ['fullscreen=no', 'autofit-larger=90%x90%'];
+}
+
 export function runtimeMpvConf({ platform, settings, advancedConf, inputConf }: RuntimeConfigInput): string {
     const spdif = spdifCodecs(settings.audioPassthrough);
     const lines = [
         ...chromeLines(inputConf),
         'title=Vora',
-        'fullscreen=yes',
+        ...windowLines(settings.startFullScreen),
         'vo=gpu-next',
         `hwdec=${settings.hardwareDecoding === 'off' ? 'no' : 'auto-safe'}`,
         `target-colorspace-hint=${settings.hdrOutput ? 'yes' : 'no'}`,
