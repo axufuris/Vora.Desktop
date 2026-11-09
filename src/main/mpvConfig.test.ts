@@ -24,6 +24,13 @@ describe('the mpv settings Vora writes', () => {
         expect(spdifCodecs('off')).toBeNull();
     });
 
+    it('starts mpv in full screen, or in a window that fits the screen when the user turned full screen off', () => {
+        expect(conf({})).toContain('fullscreen=yes');
+        expect(conf({}).some(line => line.startsWith('autofit-larger'))).toBe(false);
+        expect(conf({ startFullScreen: false })).toEqual(expect.arrayContaining(['fullscreen=no', 'autofit-larger=90%x90%']));
+        expect(conf({ startFullScreen: false })).not.toContain('fullscreen=yes');
+    });
+
     it('hands the keys, the mouse and the on-screen display to the Vora chrome when it is there', () => {
         const lines = runtimeMpvConf({ platform: 'linux', settings: DefaultSettings, advancedConf: '/u/mpv.conf', inputConf: '/app/player/input.conf' }).split('\n');
 

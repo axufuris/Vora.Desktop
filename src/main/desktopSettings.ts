@@ -10,6 +10,7 @@ export const DefaultSettings: DesktopSettings = {
     audioPassthrough: 'off',
     hdrOutput: true,
     hardwareDecoding: 'auto',
+    startFullScreen: true,
 };
 
 const SETTING_KEYS = Object.keys(DefaultSettings);
@@ -41,6 +42,10 @@ export function settingsPatchFrom(value: IpcValue): Partial<DesktopSettings> | n
     if (value.hdrOutput !== undefined) {
         if (typeof value.hdrOutput !== 'boolean') return null;
         patch.hdrOutput = value.hdrOutput;
+    }
+    if (value.startFullScreen !== undefined) {
+        if (typeof value.startFullScreen !== 'boolean') return null;
+        patch.startFullScreen = value.startFullScreen;
     }
     if (value.audioPassthrough !== undefined) {
         const passthrough = passthroughOf(value.audioPassthrough);
