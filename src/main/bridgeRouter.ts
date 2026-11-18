@@ -4,6 +4,7 @@ import { DESKTOP_BRIDGE_VERSION } from '../shared/bridge';
 import { Ipc, type PageInit, type ProbeResult, type SavedServer } from '../shared/shell';
 import { desktopCapabilities } from './capabilities';
 import type { ConnectFlow } from './connectFlow';
+import { browserAddressFrom } from './externalLinks';
 import { settingsPatchFrom, type DesktopSettingsStore } from './desktopSettings';
 import type { FileLogger } from './logger';
 import type { MpvBinary } from './mpvDiscovery';
@@ -89,6 +90,21 @@ export function registerBridge(context: BridgeContext): void {
             width: Math.round(display.size.width * display.scaleFactor),
             height: Math.round(display.size.height * display.scaleFactor),
         }, context.mpv());
+    });
+
+    handle(Ipc.openExternal, 'server', async (url): Promise<boolean> => {
+        const address = browserAddressFrom(url, window.serverOrigin());
+        if (!address) {
+            logger.warn('Refused to open an address outside the connected server');
+            return false;
+        }
+        try {
+            await shell.openExternal(address);
+            return true;
+        } catch (error: unknown) {
+            logger.warn('The browser could not be opened', error);
+            return false;
+        }
     });
 
     handle(Ipc.settingsGet, 'server', (): DesktopSettings => context.settings.get());

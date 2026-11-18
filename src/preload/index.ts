@@ -17,6 +17,7 @@ function desktopBridge(init: Extract<PageInit, { kind: 'server' }>): VoraDesktop
         mpv: init.mpv,
         onMpvChanged: handler => subscribe<MpvStatus>(Ipc.mpvChanged, handler),
         capabilities: () => ipcRenderer.invoke(Ipc.capabilities),
+        openExternal: url => ipcRenderer.invoke(Ipc.openExternal, url),
         player: {
             open: request => ipcRenderer.invoke(Ipc.playerOpen, request),
             command: command => ipcRenderer.send(Ipc.playerCommand, command),
