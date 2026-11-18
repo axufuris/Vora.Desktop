@@ -38,8 +38,10 @@ in mpv (doc 04) under a Lua chrome that copies the web player; installers and re
   `src/shared/bridge.ts`. The `Bridge contract` check fails on any difference.
 - **The renderer runs code from a network server.** Every `ipcMain` handler goes through
   the access check in `registerBridge` (the server's page or a bundled page) and validates
-  its payload (`playerRequests.ts`, `desktopSettings.ts`). Only https links leave the app,
-  in the system browser. Never accept a certificate error except a pinned fingerprint for
+  its payload (`playerRequests.ts`, `desktopSettings.ts`, `externalLinks.ts`). Only https links
+  leave the app, in the system browser; the one exception is `bridge.openExternal`, which opens
+  an http(s) address on the connected server's own origin (the pairing page for "Sign in with
+  your browser") and nothing else. Never accept a certificate error except a pinned fingerprint for
   a saved Vora server. Never hand mpv or `shell.openPath` a path or address that came from
   the renderer unchecked. Never add `--no-sandbox`, `nodeIntegration` or webviews.
 - **No Vora logic in the shell or in Lua.** What plays, when auto-skip fires and what Up

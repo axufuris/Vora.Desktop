@@ -39,6 +39,7 @@ export type LoadFailure =
 export const Ipc = {
     pageInit: 'vora:page-init',
     capabilities: 'vora:capabilities',
+    openExternal: 'vora:open-external',
     settingsGet: 'vora:settings-get',
     settingsSet: 'vora:settings-set',
     settingsOpenAdvanced: 'vora:settings-open-advanced',
