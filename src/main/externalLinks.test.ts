@@ -29,7 +29,7 @@ describe('which addresses the server page may open in the browser', () => {
     it('refuses anything that is not a web address', () => {
         expect(browserAddressFrom('file:///C:/Windows/System32/calc.exe', server)).toBeNull();
         expect(browserAddressFrom('javascript:alert(1)', server)).toBeNull();
-        expect(browserAddressFrom('ms-msdt:/id PCWDiagnostic', server)).toBeNull();
+        expect(browserAddressFrom('ms-settings:network', server)).toBeNull();
         expect(browserAddressFrom('steam://run/1', server)).toBeNull();
         expect(browserAddressFrom('ftp://vora.example.com/file', server)).toBeNull();
         expect(browserAddressFrom('vora.example.com/link', server)).toBeNull();
